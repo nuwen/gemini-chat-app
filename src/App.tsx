@@ -7,11 +7,64 @@ import {
     Box,
     TextField,
     Card,
-    Avatar,
 } from "@radix-ui/themes";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+type ChatItem = {
+    role: "user" | "model";
+    parts: [{text: string}];
+};
 
 function App() {
-    const [count, setCount] = useState(0);
+    const [value, setValue] = useState("");
+    const [error, setError] = useState("");
+    const [chatHistory, setChatHistory] = useState<ChatItem[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    const getResponse = async () => {
+        if (!value) {
+            setError("Error: Enter a prompt");
+        }
+        setLoading(true);
+        try {
+            const options = {
+                method: "POST",
+                body: JSON.stringify({
+                    history: chatHistory,
+                    message: value,
+                }),
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            };
+
+            const response = await fetch(
+                "http://localhost:8000/gemini",
+                options
+            );
+            const data = await response.text();
+            console.log(data);
+
+            setChatHistory((oldChatHistory) => [
+                ...oldChatHistory,
+                {
+                    role: "user",
+                    parts: [{text: value}],
+                },
+                {
+                    role: "model",
+                    parts: [{text: data}],
+                },
+            ]);
+            setValue("");
+        } catch (error) {
+            console.error(error);
+            setError("Error: Something went wrong!");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
         <Flex
@@ -37,14 +90,26 @@ function App() {
                     >
                         <Box width="100%">
                             <TextField.Root
+                                disabled={loading}
                                 radius="full"
                                 placeholder="Ask a question"
                                 variant="soft"
                                 size="3"
+                                onChange={(e) => setValue(e.target.value)}
+                                onKeyUp={(e) => {
+                                    e.key === "Enter" && getResponse();
+                                }}
+                                value={value}
                             >
                                 <TextField.Slot />
-                                <TextField.Slot pr='0'>
-                                    <Button size='3'>Let's go</Button>
+                                <TextField.Slot pr="0">
+                                    <Button
+                                        size="3"
+                                        onClick={getResponse}
+                                        loading={loading}
+                                    >
+                                        Let's go
+                                    </Button>
                                 </TextField.Slot>
                             </TextField.Root>
                         </Box>
@@ -52,70 +117,60 @@ function App() {
                 </Container>
             </Box>
             <Flex width="100vw" p="5" direction="column" gap="3">
-                <Flex gap="2">
-                    <Box flexShrink="0">
-                        <Card variant="classic" size="2">
-                            <Flex gap="2" align="center" direction="column">
-                                <Avatar
-                                    size="3"
-                                    src="https://images.unsplash.com/photo-1607346256330-dee7af15f7c5?&w=64&h=64&dpr=2&q=70&crop=focalpoint&fp-x=0.67&fp-y=0.5&fp-z=1.4&fit=crop"
-                                    radius="full"
-                                    fallback="T"
-                                />
-                                <Box>
-                                    <Text as="div" size="2" weight="bold">
-                                        Jarvis
-                                    </Text>
-                                </Box>
-                            </Flex>
-                        </Card>
-                    </Box>
-                    <Box p="2">
-                        <Text as="div" size="2" color="gray">
-                            Sed aliquet lacus nunc, quis pulvinar nulla
-                            ultricies in. Vestibulum sed odio scelerisque,
-                            iaculis nunc eget, rhoncus risus. Donec pellentesque
-                            pellentesque est et sodales. Etiam ac ornare lorem.
-                            Suspendisse malesuada suscipit eros, at commodo
-                            neque.
-                        </Text>
-                    </Box>
-                </Flex>
-                <Flex gap="2" direction="row-reverse">
-                    <Box flexShrink="0">
-                        <Card variant="classic" size="2">
-                            <Flex gap="2" align="center" direction="column">
-                                <Avatar
-                                    size="3"
-                                    src="https://images.unsplash.com/photo-1607346256330-dee7af15f7c5?&w=64&h=64&dpr=2&q=70&crop=focalpoint&fp-x=0.67&fp-y=0.5&fp-z=1.4&fit=crop"
-                                    radius="full"
-                                    fallback="T"
-                                />
-                                <Box>
-                                    <Text as="div" size="2" weight="bold">
-                                        Jarvis
-                                    </Text>
-                                </Box>
-                            </Flex>
-                        </Card>
-                    </Box>
-                    <Box
-                        p="2"
-                        style={{
-                            background: "var(--gray-a2)",
-                            borderRadius: "var(--radius-3)",
-                        }}
-                    >
-                        <Text as="div" size="2" color="gray">
-                            Sed aliquet lacus nunc, quis pulvinar nulla
-                            ultricies in. Vestibulum sed odio scelerisque,
-                            iaculis nunc eget, rhoncus risus. Donec pellentesque
-                            pellentesque est et sodales. Etiam ac ornare lorem.
-                            Suspendisse malesuada suscipit eros, at commodo
-                            neque.
-                        </Text>
-                    </Box>
-                </Flex>
+                {[...chatHistory].reverse().map((chatItem, _index) => {
+                    return (
+                        <Flex
+                            key={_index}
+                            gap="2"
+                            direction={
+                                chatItem.role === "user" ? "row-reverse" : "row"
+                            }
+                        >
+                            <Box flexShrink="0">
+                                <Card variant="classic" size="2">
+                                    <Flex
+                                        gap="2"
+                                        align="center"
+                                        direction="column"
+                                    >
+                                        {chatItem.role === "user" ? "🐶" : "🤖"}
+
+                                        <Box flexGrow="1">
+                                            <Text
+                                                as="div"
+                                                size="2"
+                                                weight="bold"
+                                            >
+                                                {chatItem.role === "user"
+                                                    ? "User"
+                                                    : "Jarvis"}
+                                            </Text>
+                                        </Box>
+                                    </Flex>
+                                </Card>
+                            </Box>
+                            <Box
+                                p="2"
+                                style={
+                                    chatItem.role === "model"
+                                        ? {
+                                              background: "var(--gray-a2)",
+                                              borderRadius: "var(--radius-3)",
+                                          }
+                                        : undefined
+                                }
+                            >
+                                <Text as="div" size="2" color="gray">
+                                    {chatItem.parts.map((part) => (
+                                        <Markdown remarkPlugins={[remarkGfm]}>
+                                            {part.text}
+                                        </Markdown>
+                                    ))}
+                                </Text>
+                            </Box>
+                        </Flex>
+                    );
+                })}
             </Flex>
         </Flex>
     );
